@@ -76,3 +76,10 @@ test("invalid v2 payment and garbage header -> 402 with PAYMENT-REQUIRED; free r
     assert.equal(free.headers.get("payment-required"), null);
   } finally { f.restore(); }
 });
+test("abidecode 402 bazaar includes concrete example queryParams.data", () => {
+  const bz = paymentRequiredV2({ caip: "eip155:8453", atomic: "20000", usdc: USDC, payTo: PAY }, "https://x.dev/v1/abidecode", "d").extensions.bazaar;
+  assert.equal(bz.info.input.method, "GET");
+  assert.ok(bz.info.input.queryParams && typeof bz.info.input.queryParams.data === "string");
+  assert.match(bz.info.input.queryParams.data, /^0xa9059cbb/);
+  assert.ok(bz.schema.properties.input.properties.queryParams.required.includes("data"));
+});
