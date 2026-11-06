@@ -1,6 +1,6 @@
 import test from "node:test"; import assert from "node:assert/strict";
 import { handle } from "../src/index.js";
-import { paymentRequiredV2 } from "../src/x402.js";
+import { paymentRequiredV2, x402BodyPreference, challenge as challengeFn } from "../src/x402.js";
 const PAY = "0x719227f384b66BFEF00093D6d8d32fA9dC2B40e7", USDC = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
 const ENV = { BEGGAR_DEMAND_TESTS_ENABLED: "true", X402_MODE: "mainnet", X402_MAINNET_ALLOWED: "true", X402_PAY_TO: PAY, X402_PRICE_USD: "0.02", X402_FACILITATOR_URL: "https://fac.test", OPERATOR_NAME: "Beggar Bot" };
 const dec = (h) => JSON.parse(decodeURIComponent(escape(atob(h))));
@@ -75,4 +75,62 @@ test("invalid v2 payment and garbage header -> 402 with PAYMENT-REQUIRED; free r
     const free = await handle(new Request("https://x.dev/v1/receipt/verify", { method: "POST", body: "{}" }), ENV);
     assert.equal(free.headers.get("payment-required"), null);
   } finally { f.restore(); }
+});
+test("abidecode 402 bazaar includes concrete example queryParams.data", () => {
+  const bz = paymentRequiredV2({ caip: "eip155:8453", atomic: "20000", usdc: USDC, payTo: PAY }, "https://x.dev/v1/abidecode", "d").extensions.bazaar;
+  assert.equal(bz.info.input.method, "GET");
+  assert.ok(bz.info.input.queryParams && typeof bz.info.input.queryParams.data === "string");
+  assert.match(bz.info.input.queryParams.data, /^0xa9059cbb/);
+  assert.ok(bz.schema.properties.input.properties.queryParams.required.includes("data"));
+});
+test("x402BodyPreference: only exact 2 via header or query; invalid -> error", () => {
+  const url = (q) => new URL("https://x.dev/v1/allowance" + (q || ""));
+  const req = (h) => ({ headers: { get: (k) => (k.toLowerCase() === "x402-version" ? h : null) } });
+  assert.equal(x402BodyPreference(req(null), url()).match, false);
+  assert.equal(x402BodyPreference(req("2"), url()).match, true);
+  assert.equal(x402BodyPreference(req(null), url("?x402=2")).match, true);
+  assert.equal(x402BodyPreference(req("2"), url("?x402=2")).match, true);
+  assert.ok(x402BodyPreference(req("1"), url()).error);
+  assert.ok(x402BodyPreference(req(null), url("?x402=1")).error);
+  assert.ok(x402BodyPreference(req("2.0"), url()).error);
+});
+
+test("default challenge dual-stack; opt-in matchV2Body equals PAYMENT-REQUIRED", async () => {
+  const cfg = { caip: "eip155:8453", network: "base", atomic: "20000", usdc: USDC, payTo: PAY, tokenName: "USD Coin" };
+  const dual = challengeFn(cfg, "https://x.dev/v1/allowance", "d");
+  assert.equal(dual.status, 402);
+  const dualBody = await dual.json();
+  const dualHdr = dec(dual.headers.get("payment-required"));
+  assert.equal(dualBody.x402Version, 1);
+  assert.equal(dualHdr.x402Version, 2);
+  assert.equal(dualBody.accepts[0].network, "base");
+  assert.equal(dualHdr.accepts[0].network, "eip155:8453");
+
+  const matched = challengeFn(cfg, "https://x.dev/v1/allowance", "d", { matchV2Body: true });
+  const mb = await matched.json();
+  const mh = dec(matched.headers.get("payment-required"));
+  assert.equal(mb.x402Version, 2);
+  assert.equal(mh.x402Version, 2);
+  assert.deepEqual(mb.accepts, mh.accepts);
+  assert.equal(mb.accepts[0].amount, "20000");
+});
+
+test("HTTP: default dual vs ?x402=2 / x402-version:2 on allowance + x402check; bad value 400", async () => {
+  for (const p of ["/v1/allowance", "/v1/x402check", "/v1/abidecode"]) {
+    const d = await handle(new Request("https://x.dev" + p, { method: p.includes("allowance") || p.includes("x402check") ? "POST" : "GET", body: p.includes("allowance") || p.includes("x402check") ? "{}" : undefined }), ENV);
+    assert.equal(d.status, 402);
+    const db = await d.json(); const dh = dec(d.headers.get("payment-required"));
+    assert.equal(db.x402Version, 1); assert.equal(dh.x402Version, 2);
+
+    const m = await handle(new Request("https://x.dev" + p + "?x402=2", { method: "GET" }), ENV);
+    assert.equal(m.status, 402);
+    const mb = await m.json(); const mh = dec(m.headers.get("payment-required"));
+    assert.equal(mb.x402Version, 2); assert.equal(mh.x402Version, 2); assert.deepEqual(mb.accepts, mh.accepts);
+
+    const h = await handle(new Request("https://x.dev" + p, { headers: { "x402-version": "2" } }), ENV);
+    assert.equal((await h.json()).x402Version, 2);
+
+    const bad = await handle(new Request("https://x.dev" + p + "?x402=1"), ENV);
+    assert.equal(bad.status, 400);
+  }
 });
