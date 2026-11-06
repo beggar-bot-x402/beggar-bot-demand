@@ -2386,6 +2386,7 @@ const EXAMPLES = {
   "/v1/risk": { address: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" },
   "/v1/receipt": { tx_hash: "0x" + "0".repeat(64), payer: "0x1000ea6242924445aB7a0086D0c91c2a31B0e97d", payee: "0x719227f384b66BFEF00093D6d8d32fA9dC2B40e7", amount: "0.01" },
   "/v1/seller-health": { endpoint: "https://beggar-bot-demand.beggarbot.workers.dev/v1/risk" },
+  "/v1/abidecode": { data: "0xa9059cbb000000000000000000000000719227f384b66bfef00093d6d8d32fa9dc2b40e70000000000000000000000000000000000000000000000000000000000002710" },
   "/v1/delivery-attest": { seller_url: "https://example.com/paid", tx_hash: "0x" + "0".repeat(64), payer: "0x1000ea6242924445aB7a0086D0c91c2a31B0e97d", payee: "0x719227f384b66BFEF00093D6d8d32fA9dC2B40e7", amount: "0.01" },
 };
 const toJsonSchema = (fields) => {
