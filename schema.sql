@@ -1,0 +1,3 @@
+CREATE TABLE IF NOT EXISTS calls (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT NOT NULL, route TEXT, status INTEGER, latency_ms INTEGER, ip_hash TEXT, asn TEXT, ua TEXT, agent_hdr TEXT, referrer TEXT, query_shape TEXT, x_payment INTEGER, traffic_class TEXT);
+CREATE TABLE IF NOT EXISTS receipts (seq INTEGER PRIMARY KEY AUTOINCREMENT, receipt_hash TEXT NOT NULL, prev_hash TEXT NOT NULL, body TEXT NOT NULL, ts TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS payments (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT NOT NULL, route TEXT, network TEXT, payer TEXT, amount_atomic TEXT, tx TEXT, ok INTEGER, payment_class TEXT);

@@ -1,0 +1,59 @@
+name = "beggar-bot-demand"
+main = "src/index.js"
+compatibility_date = "2026-10-01"
+workers_dev = true
+
+[vars]
+BEGGAR_DEMAND_TESTS_ENABLED = "true"
+DEFAULT_NETWORK = "base"
+RPC_URL_MAINNET = "https://base-rpc.publicnode.com"   # free public, no key, read-only
+RPC_URL_SEPOLIA = "https://sepolia.base.org"
+NETWORK = "base-sepolia"   # legacy; per-request chainEnv overrides
+CHAIN_ID = "84532"
+RPC_URL = "https://sepolia.base.org"
+USDC_ADDRESS = "0x036CbD53842c5426634e7929541eC2318f3dCF7e"
+OPERATOR_NAME = "Beggar Bot"
+# --- x402 paid mode (PREPARED, DISABLED). off | testnet | mainnet
+X402_MODE = "mainnet"
+X402_PRICE_USD = "0.02"           # allowed range 0.001-0.05 (Greg: top-25% pricing)
+X402_PAY_TO = "0x719227f384b66BFEF00093D6d8d32fA9dC2B40e7"   # bucket, receive-only (EIP-55)
+X402_FACILITATOR_URL = "https://facilitator.payai.network"   # PayAI: no signup/key, 1000 free credits per payTo; never top up
+X402_MAINNET_ALLOWED = "true"
+X402_CDP_ROUTES = "/v1/ens,/v1/txstatus,/v1/gasfee,/v1/tokenprice,/v1/tokeninfo,/v1/addrprofile,/v1/portfolio,/v1/seller-health,/v1/weather,/v1/uptime,/v1/fetch,/v1/nftmeta,/v1/txsummary,/v1/usdcamount,/v1/paymentheader,/v1/allowance,/v1/x402check,/v1/risk,/v1/verify,/v1/erc20balances,/v1/nativebalances,/v1/solbalance,/v1/dexquote,/v1/swapbest,/v1/walletlabels,/v1/defistats,/v1/chainfees"   # 27 sticky routes on CDP facilitator (Greg t181u); others PayAI. Secrets CDP_API_KEY_* in Worker secrets
+PAY_TEST_PAGE = "true"   # serves /pay-test (same-origin; no CORS_PREFLIGHT needed)
+
+[triggers]
+crons = ["17 3 * * *"]   # daily 30-day log retention
+
+[[d1_databases]]
+binding = "DB"
+database_name = "beggar-demand-logs"
+database_id = "34ef2c3e-6e0b-43c6-b8e9-5de89cfc9460"
+# Secrets (wrangler secret put): RECEIPT_SIGNING_KEY_JWK, SELFTEST_TOKEN, IP_HASH_SALT
+
+# ---- Separate TESTNET worker for end-to-end x402 test (t43u). Deploy: wrangler deploy --env test
+[env.test]
+name = "beggar-bot-demand-test"
+workers_dev = true
+[env.test.vars]
+BEGGAR_DEMAND_TESTS_ENABLED = "true"
+DEFAULT_NETWORK = "base-sepolia"
+RPC_URL_MAINNET = "https://base-rpc.publicnode.com"
+RPC_URL_SEPOLIA = "https://sepolia.base.org"
+NETWORK = "base-sepolia"
+CHAIN_ID = "84532"
+RPC_URL = "https://sepolia.base.org"
+USDC_ADDRESS = "0x036CbD53842c5426634e7929541eC2318f3dCF7e"
+OPERATOR_NAME = "Beggar Bot (testnet)"
+X402_MODE = "testnet"
+X402_PRICE_USD = "0.001"
+X402_PAY_TO = "0x719227f384b66BFEF00093D6d8d32fA9dC2B40e7"
+X402_FACILITATOR_URL = "https://facilitator.payai.network"   # x402.org is now v2-only; PayAI supports v1 base-sepolia free
+X402_MAINNET_ALLOWED = "false"
+SELF_PAYERS = "0x1000ea6242924445aB7a0086D0c91c2a31B0e97d"   # Greg's Test Payer -> SELF_GENERATED
+PAY_TEST_PAGE = "true"
+CORS_PREFLIGHT = "true"   # test only: allow cross-origin X-PAYMENT (localhost pay-test.html)
+[[env.test.d1_databases]]
+binding = "DB"
+database_name = "beggar-demand-test-logs"
+database_id = "0353106b-a4ea-4e50-b1a7-73653877dae3"
