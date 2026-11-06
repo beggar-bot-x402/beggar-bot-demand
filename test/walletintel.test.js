@@ -50,3 +50,63 @@ test("addrpoison: lookalike vs intended + labels, checksum tamper, routes paid 4
   const w = await (await handle(new Request("https://w.test/.well-known/x402"), PAID)).json(); const ord = w.endpoints.map((e) => new URL(e.resource).pathname);
   assert.ok(ord.indexOf("/v1/addrprofile") < ord.indexOf("/v1/seller-health") && ord.indexOf("/v1/ens") < ord.indexOf("/v1/risk"));
 });
+test("rpcBatch: 429 then success on retry; failover to next URL; total failure stays honest", async () => {
+  const { rpcBatch, RPCS } = await import("../src/walletintel.js");
+  const hits = [];
+  const orig = globalThis.fetch;
+  // First URL: 429 once then OK. Prefer first RPCS.base host.
+  const u0 = RPCS.base[0], u1 = RPCS.base[1];
+  globalThis.fetch = async (u, o) => {
+    hits.push(String(u));
+    if (String(u) === u0) {
+      if (hits.filter((h) => h === u0).length === 1) return new Response("nope", { status: 429 });
+      const calls = JSON.parse(o.body);
+      return new Response(JSON.stringify(calls.map((c) => ({ jsonrpc: "2.0", id: c.id, result: "0x1" }))));
+    }
+    throw new Error("unexpected url " + u);
+  };
+  try {
+    const r = await rpcBatch("base", [["eth_blockNumber", []]]);
+    assert.equal(r.results[0], "0x1");
+    assert.equal(r.rpc, new URL(u0).host);
+    assert.ok(hits.filter((h) => h === u0).length >= 2, "expected retry on same URL after 429");
+  } finally { globalThis.fetch = orig; }
+
+  const hits2 = [];
+  globalThis.fetch = async (u, o) => {
+    hits2.push(String(u));
+    if (String(u) === u0) return new Response("nope", { status: 500 });
+    if (String(u) === u1) {
+      const calls = JSON.parse(o.body);
+      return new Response(JSON.stringify(calls.map((c) => ({ jsonrpc: "2.0", id: c.id, result: "0xabc" }))));
+    }
+    throw new Error("unexpected " + u);
+  };
+  try {
+    const r = await rpcBatch("base", [["eth_blockNumber", []]]);
+    assert.equal(r.results[0], "0xabc");
+    assert.equal(r.rpc, new URL(u1).host);
+    assert.ok(hits2.includes(u0) && hits2.includes(u1));
+  } finally { globalThis.fetch = orig; }
+
+  globalThis.fetch = async () => { throw new Error("offline-all"); };
+  try {
+    await assert.rejects(() => rpcBatch("base", [["eth_blockNumber", []]]), /public rpc unavailable/);
+  } finally { globalThis.fetch = orig; }
+});
+test("rpcBatch: per-call JSON-RPC error stays null (not fabricated); does not force failover", async () => {
+  const { rpcBatch, RPCS } = await import("../src/walletintel.js");
+  const orig = globalThis.fetch;
+  let other = 0;
+  globalThis.fetch = async (u, o) => {
+    if (String(u) !== RPCS.base[0]) { other++; throw new Error("should not failover"); }
+    const calls = JSON.parse(o.body);
+    return new Response(JSON.stringify(calls.map((c, i) => i === 0 ? { jsonrpc: "2.0", id: c.id, error: { message: "execution reverted" } } : { jsonrpc: "2.0", id: c.id, result: "0x2" })));
+  };
+  try {
+    const r = await rpcBatch("base", [["eth_call", [{ to: "0x1", data: "0x" }, "latest"]], ["eth_blockNumber", []]]);
+    assert.equal(r.results[0], null);
+    assert.equal(r.results[1], "0x2");
+    assert.equal(other, 0);
+  } finally { globalThis.fetch = orig; }
+});

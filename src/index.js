@@ -159,7 +159,7 @@ import { feegrowth, revenuegrowth, dexgrowth, categoryfees } from "./pack48.js";
 import { poolhashrate, btcdiffadj, stabledominance, stablegrowth } from "./pack49.js";
 import { subtitle } from "./subtitle.js";
 import { imgmeta, avmeta, qr } from "./media.js";
-import { paidConfig, challenge, requirements, requirementsV2, v2Headers, decode, verifyPayment, settlePayment, PAID_PATHS } from "./x402.js";
+import { paidConfig, challenge, requirements, requirementsV2, v2Headers, decode, verifyPayment, settlePayment, PAID_PATHS, x402BodyPreference } from "./x402.js";
 
 const J = (obj, status = 200, extra = {}) => new Response(JSON.stringify(obj), { status, headers: { "content-type": "application/json", "access-control-allow-origin": "*", ...extra } });
 
@@ -288,7 +288,11 @@ async function paywall(env, req, url) {
   const cfg = paidConfig(env, url.pathname); if (!cfg.enabled) return null;
   const resource = url.origin + url.pathname, desc = "Beggar Bot " + url.pathname;
   const sig = req.headers.get("payment-signature"), x = sig || req.headers.get("x-payment"), version = sig ? 2 : 1;
-  if (!x) return challenge(cfg, resource, desc);
+  if (!x) {
+    const pref = x402BodyPreference(req, url);
+    if (pref.error) return J({ error: pref.error, hint: "Use header x402-version: 2 and/or query ?x402=2 for a body that matches PAYMENT-REQUIRED (v2). Default unpaid 402 keeps legacy dual-stack (body v1 + header v2)." }, 400);
+    return challenge(cfg, resource, desc, { matchV2Body: pref.match });
+  }
   const v1reqs = requirements(cfg, resource, desc), reqs = version === 2 ? requirementsV2(cfg) : v1reqs, payload = decode(x);
   const v = await verifyPayment(cfg, payload, reqs, version);
   if (!v.ok) return J({ x402Version: 1, error: "payment_invalid", reason: v.reason, accepts: [v1reqs] }, 402, v2Headers(cfg, resource, desc, "payment_invalid: " + v.reason));
@@ -308,7 +312,7 @@ export async function handle(req, env) {
   const ipHash = (await sha256hex((env.IP_HASH_SALT || "") + ipNet)).slice(0, 16);
   let res;
   try {
-    if (req.method === "OPTIONS" && env.CORS_PREFLIGHT === "true") return new Response(null, { status: 204, headers: { "access-control-allow-origin": "*", "access-control-allow-methods": "GET, POST, OPTIONS", "access-control-allow-headers": "Content-Type, X-PAYMENT, PAYMENT-SIGNATURE, Mcp-Session-Id, MCP-Protocol-Version", "access-control-expose-headers": "X-PAYMENT-RESPONSE, PAYMENT-REQUIRED, PAYMENT-RESPONSE", "access-control-max-age": "600" } });
+    if (req.method === "OPTIONS" && env.CORS_PREFLIGHT === "true") return new Response(null, { status: 204, headers: { "access-control-allow-origin": "*", "access-control-allow-methods": "GET, POST, OPTIONS", "access-control-allow-headers": "Content-Type, X-PAYMENT, PAYMENT-SIGNATURE, x402-version, Mcp-Session-Id, MCP-Protocol-Version", "access-control-expose-headers": "X-PAYMENT-RESPONSE, PAYMENT-REQUIRED, PAYMENT-RESPONSE", "access-control-max-age": "600" } });
     if (env.BEGGAR_DEMAND_TESTS_ENABLED !== "true") res = J({ error: "service disabled" }, 503);
     else if (manifests[url.pathname]) { const m = manifests[url.pathname](env, url.origin); res = new Response(m.body, { headers: { "content-type": m.type, "access-control-allow-origin": "*" } }); }
     else if (url.pathname === "/pay-test" && env.PAY_TEST_PAGE === "true") res = new Response(PAY_TEST_HTML, { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" } });
