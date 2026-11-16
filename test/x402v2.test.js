@@ -134,3 +134,21 @@ test("HTTP: default dual vs ?x402=2 / x402-version:2 on allowance + x402check; b
     assert.equal(bad.status, 400);
   }
 });
+
+test("v2 bazaar output schema uses DISCOVERY properties, not a type/example stub", () => {
+  const bz = paymentRequiredV2({ caip: "eip155:8453", atomic: "20000", usdc: USDC, payTo: PAY }, "https://x.dev/v1/portfolio", "d").extensions.bazaar;
+  assert.equal(bz.info.output.type, "json");
+  assert.equal(typeof bz.info.output.example.total_value_usd, "number");
+  assert.ok(bz.schema.properties.output.properties.total_value_usd);
+  assert.equal(bz.schema.properties.output.properties.example, undefined);
+});
+test("fetch and netintel have input examples, output examples, and required fields", () => {
+  for (const [p, key, field] of [["/v1/fetch", "queryParams", "url"], ["/v1/netintel", "queryParams", "host"]]) {
+    const bz = paymentRequiredV2({ caip: "eip155:8453", atomic: "20000", usdc: USDC, payTo: PAY }, "https://x.dev" + p, "d").extensions.bazaar;
+    assert.equal(bz.info.input.method, "GET");
+    assert.ok(bz.info.input[key][field], p + " missing input example " + field);
+    assert.ok((bz.schema.properties.input.properties[key].required || []).includes(field), p + " required");
+    assert.ok(bz.info.output.example, p + " missing output example");
+    assert.ok(bz.schema.properties.output.properties, p + " missing output schema");
+  }
+});
