@@ -42,3 +42,12 @@ test("aliases: even count, paid 402 at 20000 with alias resource, serve canonica
   const m = await (await handle(new Request("https://x.dev/mcp", { method: "POST", headers: { "content-type": "application/json", accept: "application/json, text/event-stream" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }) }), ENV)).json();
   const N = new Set(m.result.tools.map((t) => t.name)); assert.equal(N.size, m.result.tools.length); for (const a of A) { const n = a.slice(4).replace(/\W+/g, "_"); assert.ok(N.has(n) || N.has(n + "_api"), a); }
 });
+
+test("/sla and /.well-known/sla.json publish objectives + free routes", async () => {
+  const { manifests } = await import("../src/manifests.js");
+  const env = { X402_PAY_TO: "0x719227f384b66BFEF00093D6d8d32fA9dC2B40e7" };
+  for (const p of ["/sla", "/.well-known/sla.json"]) {
+    const j = JSON.parse(manifests[p](env, "https://x").body);
+    assert.equal(j.price_usd_per_call, 0.02); assert.equal(j.free_routes.length, 2); assert.equal(j.top_paid_routes.length, 10); assert.equal(j.payTo, env.X402_PAY_TO);
+  }
+});
