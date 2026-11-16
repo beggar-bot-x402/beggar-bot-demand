@@ -1,3 +1,4 @@
+import { applySearchCopy } from "./searchcopy.js";
 // x402 paid mode. Default off. Mainnet requires X402_MODE=mainnet AND X402_MAINNET_ALLOWED=true AND valid X402_PAY_TO.
 import { isAddr } from "./lib.js";
 // tokenName = the USDC contract's EIP-712 domain name (on-chain name()): Base mainnet "USD Coin", Base Sepolia "USDC". Clients sign EIP-3009 against extra.name, so it must match.
@@ -113,7 +114,7 @@ Object.assign(DISCOVERY, {
     input: { type: "http", method: "POST", bodyType: "json", discoverable: true, bodyFields: { data: S("string", "0x calldata", { required: true }), to: S("string", "target contract") } },
     output: { type: "object", properties: { root: S("object"), inner_calls: S("number"), flags: S("array", "", { items: { type: "string" } }), verdict: S("string") } } },
   "/v1/tokenprice": { description: "On-chain token price, ≤4 tokens/call (keyless public RPC, one batch, fails soft): Uniswap v3 pools (1/5/30/100 bps) + Aerodrome volatile/stable pools vs USDC and WETH, addresses derived by CREATE2 (no indexer/API key); spot USD price from the deepest pool by quote-side liquidity, all pool quotes, cross-pool spread, THIN/LOW_LIQUIDITY + POOL_PRICE_DIVERGENCE flags, confidence. Base default; ethereum (Uniswap v3)", tags: ["price", "token", "dex", "on-chain-data", "base"],
-    input: { type: "http", method: "GET", discoverable: true, queryParams: { tokens: S("string", "comma list of token addresses (≤4)", { required: true }), chain: S("string", "base (default) or ethereum") } },
+    input: { type: "http", method: "GET", discoverable: true, queryParams: { tokens: S("string", "≤4 comma-separated token symbols (ETH, BTC, USDC, AERO…) or contract addresses", { required: true }), chain: S("string", "base (default) or ethereum") } },
     output: { type: "object", properties: { eth_usd: S("number"), tokens: S("array", "price_usd, source, deepest_pool, quote_side_liquidity_usd, flags, confidence, pools", { items: { type: "object" } }), live: S("boolean") } } },
   "/v1/portfolio": { description: "Wallet portfolio enrichment (keyless RPC, ≤2 batches, fails soft): native ETH + balances across 24 curated top Base tokens (USDC, USDbC, USDT, DAI, EURC, USDS, sUSDS, USDe, WETH, cbETH, wstETH, rETH, weETH, cbBTC, AERO, VIRTUAL, DEGEN, BRETT, TOSHI, ZORA, MORPHO, WELL, LINK, KAITO) + your tokens= (≤20), each priced on-chain (Uniswap v3/Aerodrome) -> USD value, total_value_usd, account type (EOA/7702/contract), nonce", tags: ["wallet", "portfolio", "balances", "enrichment", "base"],
     input: { type: "http", method: "GET", discoverable: true, queryParams: { address: { ...ADDR, description: "wallet address", required: true }, tokens: S("string", "optional extra token addresses (≤20)"), chain: S("string", "base (default) or ethereum (needs tokens)") } },
@@ -1811,6 +1812,7 @@ Object.assign(DISCOVERY, {
     input: { type: "http", method: "GET", discoverable: true, queryParams: { period: S("string", "7d|30d"), order: S("string", "growing|shrinking"), min_usd: S("string", "default 10000000"), limit: S("string", "1-200") } },
     output: { type: "object" } },
 });
+applySearchCopy(DISCOVERY);
 const EXAMPLES = {
   "/v1/poolhashrate": "/v1/poolhashrate?pool=foundryusa",
   "/v1/btcdiffadj": "/v1/btcdiffadj?period=1y",
@@ -2375,7 +2377,7 @@ const EXAMPLES = {
   "/v1/nftmeta": { contract: "0x57f1887a8BF19b14fC0dF6Fd9B2acc9Af147eA85", token_id: "1", chain: "ethereum" },
   "/v1/txsummary": { tx_hash: "0x" + "0".repeat(64), chain: "base" },
   "/v1/batchdecode": { data: "0xac9650d8" + "20".padStart(64, "0") + "0".repeat(64), to: "0xcA11bde05977b3631167028862bE2a173976CA11" },
-  "/v1/tokenprice": { tokens: "0x940181a94A35A4569E4529A3CDfB74e38FD98631,0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf", chain: "base" },
+  "/v1/tokenprice": { tokens: "ETH,AERO", chain: "base" },
   "/v1/portfolio": { address: "0x719227f384b66BFEF00093D6d8d32fA9dC2B40e7", chain: "base" },
   "/v1/gasfee": { chain: "base" },
   "/v1/safetx": { safe: "0x67f066c7aea422a690f42788cd7a573b30f1194a", to: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", value: "0", data: "0x", nonce: "0", chain: "base" },

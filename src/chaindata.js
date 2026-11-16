@@ -75,15 +75,24 @@ function rowsFor(r, plan, chain, eth) {
     return { ...o, price_usd: best.price_usd, source: best.venue + (best.fee_bps ? " " + best.fee_bps + "bps" : "") + " vs " + best.quote, deepest_pool: best.pool, quote_side_liquidity_usd: best.quote_side_liquidity_usd, cross_pool_spread_pct: r6(spread), flags: f, confidence: f.length ? "low" : deep.length > 1 ? "high" : "medium", pools: pools.slice(0, 8) };
   });
 }
+// symbol -> address for /v1/tokenprice (agents search "ETH price"; accept common tickers, not just addresses)
+const ETH_TOKENS = { ETH: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2", WETH: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2", USDC: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48", USDT: "0xdAC17F958D2ee523a2206206994597C13D831ec7", DAI: "0x6B175474E89094C44Da98b954EedeAC495271d0F", WBTC: "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599", BTC: "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599", LINK: "0x514910771AF9Ca656af840dff83E8264EcF986CA", UNI: "0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984" };
+export function symbolMap(chain) {
+  if (chain === "ethereum") return ETH_TOKENS;
+  const m = {}; for (const [k, v] of Object.entries(BASE_TOKENS)) m[k.toUpperCase()] = v;
+  return { ETH: BASE_TOKENS.WETH, BTC: BASE_TOKENS.cbBTC, ...m };
+}
 // ---- 1. /v1/tokenprice ----
 export async function tokenprice(a) {
-  const toks = list(a.tokens ?? a.token ?? a.address); if (!toks.length) return bad("token (or tokens, ≤4 comma list) required");
-  if (toks.length > 4) return bad("≤4 tokens per call"); const badA = toks.find((t) => !isA(t)); if (badA) return bad("invalid address: " + badA);
+  const raw = list(a.tokens ?? a.token ?? a.symbols ?? a.symbol ?? a.address); if (!raw.length) return bad("token (or tokens, ≤4 comma list) required: contract address or symbol, e.g. tokens=ETH,USDC,AERO");
+  if (raw.length > 4) return bad("≤4 tokens per call");
   const chain = CHAINS(a.chain || a.network); if (!chain) return bad("chain: base (default) or ethereum");
+  const symMap = symbolMap(chain), toks = raw.map((t) => (isA(t) ? t : symMap[t.toUpperCase()] || t));
+  const badA = toks.find((t) => !isA(t)); if (badA) return bad("unknown token: " + badA + " — pass a contract address or one of these " + chain + " symbols: " + Object.keys(symMap).join(", "));
   const { calls, plan, refI } = pricePlan(chain, toks);
   try { const { results, rpc } = await rpcBatch(chain, calls); const { eth_usd, rows } = priceRows(results, plan, refI, chain);
     return { status: 200, body: { chain, live: true, rpc, method: "spot price from on-chain pool state (Uniswap v3 slot0" + (VENUES[chain].aero ? ", Aerodrome getReserves" : "") + "), deepest pool by quote-side liquidity; not a TWAP", eth_usd, count: rows.length, tokens: rows } };
-  } catch (e) { return { status: 200, body: { chain, live: false, rpc_error: String(e.message || e).slice(0, 160), note: "public RPC unreachable; retry", tokens: toks.map((t) => ({ token: checksum(t), label: label(t) })) } }; }
+  } catch (e) { return { status: 503, body: { retry: true, charged: false, chain, live: false, rpc_error: String(e.message || e).slice(0, 160), note: "public RPC unreachable; retry", tokens: toks.map((t) => ({ token: checksum(t), label: label(t) })) } }; }
 }
 // ---- 2. /v1/gasfee ----
 const GPO = "0x420000000000000000000000000000000000000F";
@@ -109,7 +118,7 @@ export async function gasfee(a) {
   const l1i = calls.length; if (cfg.op) for (const [, [, bytes]] of Object.entries(presets)) calls.push(call(GPO, sel("getL1FeeUpperBound(uint256)") + w32(bytes)));
   const usePrice = !cfg.testnet && cfg.native === "ETH", ref = uniPool(VENUES.base.uni, VENUES.base.weth, VENUES.base.usdc, 500);
   if (usePrice && chain === "base") calls.push(call(ref, S_SLOT0));
-  let r, rpc; try { ({ results: r, rpc } = await rpcBatch(chain, calls)); } catch (e) { return { status: 200, body: { chain, live: false, rpc_error: String(e.message || e).slice(0, 160), note: "public RPC unreachable; retry" } }; }
+  let r, rpc; try { ({ results: r, rpc } = await rpcBatch(chain, calls)); } catch (e) { return { status: 503, body: { retry: true, charged: false, chain, live: false, rpc_error: String(e.message || e).slice(0, 160), note: "public RPC unreachable; retry" } }; }
   let ethS = chain === "base" && usePrice ? r[calls.length - 1] : null;
   if (usePrice && chain !== "base") { try { ethS = (await rpcBatch("base", [call(ref, S_SLOT0)])).results[0]; } catch {} }
   const eth = ethS && ethS.length >= 66 && big(ethS.slice(0, 66)) ? v3Price(big(ethS.slice(0, 66)), VENUES.base.weth, VENUES.base.usdc, 18, 6) : null;
@@ -192,7 +201,7 @@ export async function portfolio(a) {
   const seen = new Set(cur.map(([, x]) => x.toLowerCase())); const toks = [...cur.map(([s, x]) => ({ sym: s, addr: x, dec: DEC[s] ?? 18 })), ...extra.filter((x) => !seen.has(x.toLowerCase()) && seen.add(x.toLowerCase())).map((x) => ({ addr: x, dec: null }))];
   const v = VENUES[chain]; const calls = [["eth_getBalance", [who, "latest"]], ["eth_getTransactionCount", [who, "latest"]], ["eth_getCode", [who, "latest"]], call(uniPool(v.uni, v.weth, v.usdc, 500), S_SLOT0)];
   for (const t of toks) { calls.push(call(t.addr, S_BAL + aw(who))); if (t.dec == null) calls.push(call(t.addr, S_DEC), call(t.addr, S_SYM)); }
-  let r, rpc; try { ({ results: r, rpc } = await rpcBatch(chain, calls)); } catch (e) { return { status: 200, body: { address: checksum(who), chain, live: false, rpc_error: String(e.message || e).slice(0, 160), note: "public RPC unreachable; retry" } }; }
+  let r, rpc; try { ({ results: r, rpc } = await rpcBatch(chain, calls)); } catch (e) { return { status: 503, body: { retry: true, charged: false, address: checksum(who), chain, live: false, rpc_error: String(e.message || e).slice(0, 160), note: "public RPC unreachable; retry" } }; }
   const eth = r[3] && r[3].length >= 66 && big(r[3].slice(0, 66)) ? v3Price(big(r[3].slice(0, 66)), v.weth, v.usdc, 18, 6) : null;
   let k = 4; const held = [];
   for (const t of toks) { const bal = big(r[k++]); if (t.dec == null) { const d = r[k++], s = r[k++]; t.dec = d && d !== "0x" ? Number(big(d)) : null; t.sym = decodeStr(s); } if (bal > 0n) held.push({ ...t, bal }); }
