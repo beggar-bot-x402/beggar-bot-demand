@@ -19,20 +19,49 @@ export const LABELS = Object.fromEntries(Object.entries({
 }).map(([k, v]) => [k.toLowerCase(), v]));
 const label = (a) => LABELS[String(a).toLowerCase()] || null;
 // ---- keyless public RPC (fail soft) ----
-export const RPCS = { base: ["https://base-rpc.publicnode.com", "https://mainnet.base.org", "https://base.drpc.org"], ethereum: ["https://ethereum-rpc.publicnode.com", "https://eth.drpc.org", "https://1rpc.io/eth", "https://eth.merkle.io"], "base-sepolia": ["https://sepolia.base.org"], optimism: ["https://optimism-rpc.publicnode.com"], arbitrum: ["https://arbitrum-one-rpc.publicnode.com"], polygon: ["https://polygon-bor-rpc.publicnode.com"] };
+// Prefer publicnode; keep official + 1–2 community mirrors. No fabricated results on total failure.
+export const RPCS = {
+  base: ["https://base-rpc.publicnode.com", "https://mainnet.base.org", "https://base.drpc.org", "https://base.meowrpc.com"],
+  ethereum: ["https://ethereum-rpc.publicnode.com", "https://eth.drpc.org", "https://eth.merkle.io", "https://ethereum.publicnode.com"],
+  "base-sepolia": ["https://sepolia.base.org", "https://base-sepolia-rpc.publicnode.com"],
+  optimism: ["https://optimism-rpc.publicnode.com", "https://mainnet.optimism.io"],
+  arbitrum: ["https://arbitrum-one-rpc.publicnode.com", "https://arb1.arbitrum.io/rpc"],
+  polygon: ["https://polygon-bor-rpc.publicnode.com", "https://polygon-rpc.com"],
+};
 const CHAIN_ALIAS = { "8453": "base", "eip155:8453": "base", "1": "ethereum", mainnet: "ethereum", eth: "ethereum", "eip155:1": "ethereum", "84532": "base-sepolia", "10": "optimism", op: "optimism", "42161": "arbitrum", arb: "arbitrum", "137": "polygon" };
 const chainKey = (c) => { const s = String(c ?? "base").trim().toLowerCase(); return RPCS[s] ? s : CHAIN_ALIAS[s] || null; };
 const USDC_BY = { base: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", ethereum: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48", "base-sepolia": "0x036CbD53842c5426634e7929541eC2318f3dCF7e", optimism: "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85", arbitrum: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831", polygon: "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359" };
-// One JSON-RPC batch per call (1 subrequest); tries next endpoint on failure. Returns array of results (null on per-call error) or throws.
+const RPC_TRIES = 2; // per URL; with URL failover keeps worst-case latency bounded
+const RPC_TIMEOUT_MS = 4500;
+const RPC_BACKOFF_MS = [80, 200]; // short, only on 429/5xx/timeout
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const transient = (e, status) => {
+  if (status === 429 || (status >= 500 && status <= 599)) return true;
+  const m = String(e && e.message || e || "");
+  return /timeout|TimeoutError|network|ECONN|fetch failed|429|502|503|504|http 5\d\d/i.test(m);
+};
+// One JSON-RPC batch per attempt; bounded retries per URL then next endpoint. Per-call JSON-RPC errors stay null (honest). Total transport failure throws.
 export async function rpcBatch(chain, calls) {
+  const urls = RPCS[chain]; if (!urls || !urls.length) throw new Error("unknown chain for rpc");
   let last;
-  for (const url of RPCS[chain]) {
-    try {
-      const r = await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(calls.map(([m, p], i) => ({ jsonrpc: "2.0", id: i, method: m, params: p }))), signal: AbortSignal.timeout(5000) });
-      if (!r.ok) throw new Error("http " + r.status);
-      const j = await r.json(); if (!Array.isArray(j)) throw new Error(j && j.error ? j.error.message : "non-batch reply");
-      const out = new Array(calls.length).fill(null); for (const x of j) if (x && typeof x.id === "number" && !x.error) out[x.id] = x.result; return { results: out, rpc: new URL(url).host };
-    } catch (e) { last = e; }
+  for (const url of urls) {
+    for (let attempt = 0; attempt < RPC_TRIES; attempt++) {
+      try {
+        const r = await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(calls.map(([m, p], i) => ({ jsonrpc: "2.0", id: i, method: m, params: p }))), signal: AbortSignal.timeout(RPC_TIMEOUT_MS) });
+        if (!r.ok) {
+          const err = new Error("http " + r.status); err.status = r.status; throw err;
+        }
+        const j = await r.json(); if (!Array.isArray(j)) throw new Error(j && j.error ? j.error.message : "non-batch reply");
+        // Accept batch even when some ids errored (null slots); that is legitimate chain/contract failure, not transport failure.
+        const out = new Array(calls.length).fill(null); for (const x of j) if (x && typeof x.id === "number" && !x.error) out[x.id] = x.result;
+        return { results: out, rpc: new URL(url).host };
+      } catch (e) {
+        last = e;
+        const st = e && e.status; const retry = attempt + 1 < RPC_TRIES && transient(e, st);
+        if (retry) await sleep(RPC_BACKOFF_MS[attempt] ?? 200);
+        else break; // next URL
+      }
+    }
   }
   throw new Error("public rpc unavailable: " + (last && last.message));
 }
