@@ -24,6 +24,21 @@ test("paid-route input errors carry charged:false + example_call", async () => {
 test("slim x402-top manifest lists only demand-matched routes at 20000", async () => {
   const ENV = { BEGGAR_DEMAND_TESTS_ENABLED: "true", X402_MODE: "mainnet", X402_MAINNET_ALLOWED: "true", X402_PAY_TO: "0x719227f384b66BFEF00093D6d8d32fA9dC2B40e7", X402_PRICE_USD: "0.02", X402_FACILITATOR_URL: "https://fac.test", OPERATOR_NAME: "Beggar Bot" };
   const r = await handle(new Request("https://x.dev/.well-known/x402-top.json"), ENV); assert.equal(r.status, 200); const t = await r.text(); const b = JSON.parse(t);
-  assert.equal(b.resources.length, Object.keys(SEARCH_COPY).length); assert.ok(t.length < 100000, String(t.length));
-  for (const x of b.endpoints) assert.equal(x.accepts[0].maxAmountRequired, "20000");
+  assert.equal(b.resources.length, Object.keys(SEARCH_COPY).length + 16); assert.ok(t.length < 100000, String(t.length));
+  for (const x of b.resources) assert.equal(x.accepts[0].maxAmountRequired, "20000");
+});
+import { ALIASES } from "../src/searchcopy.js"; import { PAID_PATHS, paidConfig } from "../src/x402.js";
+test("aliases: even count, paid 402 at 20000 with alias resource, serve canonical handler, CDP mapping", async () => {
+  const ENV = { BEGGAR_DEMAND_TESTS_ENABLED: "true", X402_MODE: "mainnet", X402_MAINNET_ALLOWED: "true", X402_PAY_TO: "0x719227f384b66BFEF00093D6d8d32fA9dC2B40e7", X402_PRICE_USD: "0.02", X402_FACILITATOR_URL: "https://fac.test", OPERATOR_NAME: "Beggar Bot", X402_CDP_ROUTES: "/v1/tokenprice,/v1/basename", CDP_API_KEY_ID: "k", CDP_API_KEY_SECRET: "s" };
+  const A = Object.keys(ALIASES); assert.equal(A.length % 2, 0);
+  for (const a of A) {
+    assert.ok(PAID_PATHS.has(a), a); assert.ok(DISCOVERY[a], a);
+    const r = await handle(new Request("https://x.dev" + a), ENV); assert.equal(r.status, 402, a); const b = await r.json();
+    assert.equal(b.accepts[0].maxAmountRequired, "20000"); assert.equal(b.accepts[0].resource, "https://x.dev" + a);
+  }
+  assert.ok(paidConfig(ENV, "/v1/token-price").cdp); assert.ok(paidConfig(ENV, "/v1/basename/resolve").cdp); assert.ok(!paidConfig(ENV, "/v1/gas-price").cdp);
+  const FREE = { BEGGAR_DEMAND_TESTS_ENABLED: "true", X402_MODE: "off", OPERATOR_NAME: "Beggar Bot" };
+  const e = await handle(new Request("https://x.dev/v1/token-price"), FREE); assert.equal(e.status, 400); assert.match((await e.json()).error, /token/);
+  const m = await (await handle(new Request("https://x.dev/mcp", { method: "POST", headers: { "content-type": "application/json", accept: "application/json, text/event-stream" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }) }), ENV)).json();
+  const N = new Set(m.result.tools.map((t) => t.name)); assert.equal(N.size, m.result.tools.length); for (const a of A) { const n = a.slice(4).replace(/\W+/g, "_"); assert.ok(N.has(n) || N.has(n + "_api"), a); }
 });

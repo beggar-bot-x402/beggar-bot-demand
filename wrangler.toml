@@ -19,7 +19,7 @@ X402_PRICE_USD = "0.02"           # allowed range 0.001-0.05 (Greg: top-25% pric
 X402_PAY_TO = "0x719227f384b66BFEF00093D6d8d32fA9dC2B40e7"   # bucket, receive-only (EIP-55)
 X402_FACILITATOR_URL = "https://facilitator.payai.network"   # PayAI: no signup/key, 1000 free credits per payTo; never top up
 X402_MAINNET_ALLOWED = "true"
-X402_CDP_ROUTES = "/v1/ens,/v1/txstatus,/v1/gasfee,/v1/tokenprice,/v1/tokeninfo,/v1/addrprofile,/v1/portfolio,/v1/seller-health,/v1/weather,/v1/uptime,/v1/fetch,/v1/nftmeta,/v1/txsummary,/v1/usdcamount,/v1/paymentheader,/v1/allowance,/v1/x402check,/v1/risk,/v1/verify,/v1/erc20balances,/v1/nativebalances,/v1/solbalance,/v1/dexquote,/v1/swapbest,/v1/walletlabels,/v1/defistats,/v1/chainfees"   # 27 sticky routes on CDP facilitator (Greg t181u); others PayAI. Secrets CDP_API_KEY_* in Worker secrets
+X402_CDP_ROUTES = "/v1/ens,/v1/txstatus,/v1/gasfee,/v1/tokenprice,/v1/tokeninfo,/v1/addrprofile,/v1/portfolio,/v1/seller-health,/v1/weather,/v1/uptime,/v1/fetch,/v1/nftmeta,/v1/txsummary,/v1/usdcamount,/v1/paymentheader,/v1/allowance,/v1/x402check,/v1/risk,/v1/verify,/v1/erc20balances,/v1/nativebalances,/v1/solbalance,/v1/dexquote,/v1/swapbest,/v1/walletlabels,/v1/defistats,/v1/chainfees,/v1/basename,/v1/perpfunding,/v1/stablepeg,/v1/cryptonews,/v1/nativebalances"   # 32 sticky routes (Greg t181u; +5 t213u) on CDP facilitator (Greg t181u); others PayAI. Secrets CDP_API_KEY_* in Worker secrets
 PAY_TEST_PAGE = "true"   # serves /pay-test (same-origin; no CORS_PREFLIGHT needed)
 
 [triggers]

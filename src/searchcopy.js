@@ -34,3 +34,13 @@ export function applySearchCopy(table, { tags = true } = {}) {
   return table;
 }
 export const HEADLINE = "Pay-per-call data APIs for AI agents, $0.02 USDC per call via x402 on Base (no API key, no signup): crypto token prices, wallet balances & portfolios, gas prices, transaction decode & status, ENS / Basenames resolve, token info & address checks, web page fetch to markdown, crypto news, weather, perp funding rates, stablecoin pegs, x402 payment tools — 600+ endpoints.";
+
+// Plain-word URL aliases (Greg t213u): same handler, price, metadata; separate resource URL so search/routers match the path.
+export const ALIASES = {
+  "/v1/token-price": "/v1/tokenprice", "/v1/gas-price": "/v1/gasfee", "/v1/wallet/token-balances": "/v1/erc20balances", "/v1/web/fetch": "/v1/fetch",
+  "/v1/wallet/portfolio": "/v1/portfolio", "/v1/wallet/balance": "/v1/nativebalances", "/v1/tx/decode": "/v1/txsummary", "/v1/tx/status": "/v1/txstatus",
+  "/v1/token/info": "/v1/tokeninfo", "/v1/ens/resolve": "/v1/ens", "/v1/basename/resolve": "/v1/basename", "/v1/perp/funding-rate": "/v1/perpfunding",
+  "/v1/stablecoin/peg": "/v1/stablepeg", "/v1/crypto/news": "/v1/cryptonews", "/v1/weather/forecast": "/v1/weather", "/v1/address/check": "/v1/addrprofile",
+};
+export const canonical = (p) => ALIASES[p] || p;
+export function addAliases(table, clone = (v) => ({ ...v })) { for (const [a, c] of Object.entries(ALIASES)) if (table[c] && !table[a]) table[a] = clone(table[c]); return table; }
