@@ -21,3 +21,9 @@ test("paid-route input errors carry charged:false + example_call", async () => {
   }
   const nf = await handle(new Request("https://x.dev/v1/nope"), ENV); assert.equal(nf.status, 404); assert.equal((await nf.json()).charged, undefined);
 });
+test("slim x402-top manifest lists only demand-matched routes at 20000", async () => {
+  const ENV = { BEGGAR_DEMAND_TESTS_ENABLED: "true", X402_MODE: "mainnet", X402_MAINNET_ALLOWED: "true", X402_PAY_TO: "0x719227f384b66BFEF00093D6d8d32fA9dC2B40e7", X402_PRICE_USD: "0.02", X402_FACILITATOR_URL: "https://fac.test", OPERATOR_NAME: "Beggar Bot" };
+  const r = await handle(new Request("https://x.dev/.well-known/x402-top.json"), ENV); assert.equal(r.status, 200); const t = await r.text(); const b = JSON.parse(t);
+  assert.equal(b.resources.length, Object.keys(SEARCH_COPY).length); assert.ok(t.length < 100000, String(t.length));
+  for (const x of b.endpoints) assert.equal(x.accepts[0].maxAmountRequired, "20000");
+});
