@@ -615,6 +615,7 @@ const fieldsOf = (list) => Object.fromEntries((list || []).map((n) => [n.replace
 for (const [p, d] of Object.entries(rawPaths)) if (PAID_PATHS.has(p) && !DISCOVERY[p]) DISCOVERY[p] = { description: d.description, tags: ["beggar-bot", p.split("/").pop()],
   input: d.method === "GET" ? { type: "http", method: "GET", discoverable: true, queryParams: fieldsOf(d.params) } : { type: "http", method: d.method, bodyType: "json", discoverable: true, bodyFields: fieldsOf(d.body) },
   output: { type: "object", description: "JSON result object as described for this route" } };
+applySearchCopy(DISCOVERY); // routes whose DISCOVERY entry is minted from the catalog above
 const PAYINFO = (c) => ({ protocols: ["x402"], pricingMode: "fixed", price: String(Number(c.atomic) / 1e6), currency: "USD", asset: "USDC", network: c.network });
 const openapi = (o, env) => { const c = priced(env); return { openapi: "3.1.0", info: { title: "Beggar Bot agent utilities (Base mainnet)", version: "0.3.4", description: priceNote(env) + " Operator: Beggar Bot." }, servers: [{ url: o }],
   components: { securitySchemes: { x402: { type: "apiKey", in: "header", name: "X-PAYMENT", description: "x402 payment payload (v1 X-PAYMENT or v2 PAYMENT-SIGNATURE). Unpaid requests get HTTP 402 with accepts[]." } } },
