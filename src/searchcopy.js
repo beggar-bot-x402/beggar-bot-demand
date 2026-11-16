@@ -2,7 +2,7 @@
 // Plain "<thing> API: give X, get Y" wording that agents' discovery queries actually use ("token price", "wallet balance",
 // "gas price", "ens resolve", "decode transaction"...). Overrides description + prepends tags in DISCOVERY (402 + Bazaar),
 // the catalog (openapi / llms.txt / .well-known) and MCP tool descriptions. Behaviour and price are unchanged.
-const PAYNOTE = " Payment settles only after a successful response; bad input or upstream outage is not charged.";
+const PAYNOTE = " Payment settles only after a successful (2xx) response; input errors are never charged.";
 export const SEARCH_COPY = {
   "/v1/tokenprice": { d: "Crypto token price API for AI agents: give up to 4 token symbols (ETH, BTC, USDC, AERO, DEGEN, cbBTC, VIRTUAL…) or contract addresses on Base or Ethereum, get the live USD price read from on-chain DEX pools (Uniswap v3, Aerodrome) with pool liquidity, cross-pool spread and a confidence flag. No API key.", t: ["token price", "crypto price", "usd price", "price api", "eth price"] },
   "/v1/portfolio": { d: "Wallet balance and portfolio API for AI agents: give a Base wallet address, get native ETH plus balances of 24 top Base tokens (USDC, USDT, DAI, WETH, cbBTC, AERO, VIRTUAL…) and any extra tokens you list, each priced in USD on-chain, with total portfolio value and account type.", t: ["wallet balance", "portfolio", "token balances", "holdings", "net worth"] },

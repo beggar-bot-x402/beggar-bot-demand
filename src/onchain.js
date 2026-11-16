@@ -46,7 +46,7 @@ export async function tokeninfo(a) {
     const lab = o.label || ""; if (o.symbol && /^(USDC|USDT|WETH|DAI|ETH|WBTC)$/i.test(o.symbol) && !lab) f.push("IMPERSONATES_MAJOR_SYMBOL_UNLABELED");
     o.flags = f; o.verdict = f.includes("IMPERSONATES_MAJOR_SYMBOL_UNLABELED") || f.includes("SPAM_LIKE_NAME_OR_URL") ? "suspicious" : f.length ? "review" : "ok"; return o;
   });
-  return { status: 200, body: { chain, live, ...(rpc ? { rpc } : {}), ...(err ? { rpc_error: err, note: "public RPC unreachable; labels only" } : {}), count: tokens.length, tokens } };
+  return { status: live ? 200 : 503, body: { chain, live, ...(live ? {} : { retry: true, charged: false }), ...(rpc ? { rpc } : {}), ...(err ? { rpc_error: err, note: "public RPC unreachable; labels only" } : {}), count: tokens.length, tokens } };
 }
 // ---- 2. /v1/nftmeta ----
 export function normUri(u, id) {
@@ -111,7 +111,7 @@ export async function txsummary(a) {
   try { const { results: [tx, rc], rpc } = await rpcBatch(chain, [["eth_getTransactionByHash", [h]], ["eth_getTransactionReceipt", [h]]]);
     if (!tx && !rc) return { status: 200, body: { chain, live: true, rpc, hash: h, found: false, note: "not found on this chain (wrong chain? try chain=ethereum)" } };
     return { status: 200, body: { chain, live: true, rpc, found: true, ...summarizeReceipt(tx, rc, { sigs }) } };
-  } catch (e) { return { status: 200, body: { chain, hash: h, live: false, rpc_error: String(e.message || e).slice(0, 160), note: "public RPC unreachable; retry or pass receipt JSON" } }; }
+  } catch (e) { return { status: 503, body: { retry: true, charged: false, chain, hash: h, live: false, rpc_error: String(e.message || e).slice(0, 160), note: "public RPC unreachable; retry or pass receipt JSON" } }; }
 }
 // ---- 4. /v1/batchdecode ----
 const UR = { 0x00: "V3_SWAP_EXACT_IN", 0x01: "V3_SWAP_EXACT_OUT", 0x02: "PERMIT2_TRANSFER_FROM", 0x03: "PERMIT2_PERMIT_BATCH", 0x04: "SWEEP", 0x05: "TRANSFER", 0x06: "PAY_PORTION", 0x08: "V2_SWAP_EXACT_IN", 0x09: "V2_SWAP_EXACT_OUT", 0x0a: "PERMIT2_PERMIT", 0x0b: "WRAP_ETH", 0x0c: "UNWRAP_WETH", 0x0d: "PERMIT2_TRANSFER_FROM_BATCH", 0x0e: "BALANCE_CHECK_ERC20", 0x10: "V4_SWAP", 0x11: "V3_POSITION_MANAGER_PERMIT", 0x12: "V3_POSITION_MANAGER_CALL", 0x13: "V4_INITIALIZE_POOL", 0x14: "V4_POSITION_MANAGER_CALL", 0x21: "EXECUTE_SUB_PLAN" };
