@@ -159,7 +159,7 @@ import { feegrowth, revenuegrowth, dexgrowth, categoryfees } from "./pack48.js";
 import { poolhashrate, btcdiffadj, stabledominance, stablegrowth } from "./pack49.js";
 import { subtitle } from "./subtitle.js";
 import { imgmeta, avmeta, qr } from "./media.js";
-import { paidConfig, challenge, requirements, requirementsV2, v2Headers, decode, verifyPayment, settlePayment, PAID_PATHS, x402BodyPreference } from "./x402.js";
+import { paidConfig, challenge, requirements, requirementsV2, v2Headers, decode, verifyPayment, settlePayment, PAID_PATHS, x402BodyPreference, bazaarV2 } from "./x402.js";
 
 const J = (obj, status = 200, extra = {}) => new Response(JSON.stringify(obj), { status, headers: { "content-type": "application/json", "access-control-allow-origin": "*", ...extra } });
 
@@ -1039,6 +1039,7 @@ export async function handle(req, env) {
     else if (url.pathname === "/v1/batch" && req.method === "POST") { let b = null; try { b = await req.json(); } catch {} const o = await batch(b); res = J(o.body, o.status); }
     else res = J({ error: "not found" }, 404);
   } catch (e) { res = J({ error: "upstream_error", detail: String(e.message || e).slice(0, 160) }, 502); }
+  if (PAID_PATHS.has(url.pathname) && [400, 404, 422].includes(res.status)) res = await withHint(res, url);
   if (req.__pay) {
     if (res.ok) {
       const st = await settlePayment(req.__pay.cfg, req.__pay.payload, req.__pay.reqs, req.__pay.version);
@@ -1050,5 +1051,16 @@ export async function handle(req, env) {
   }
   try { await logCall(env, req, url, res.status, started, ipHash); } catch {}
   return res;
+}
+// Input errors on paid routes: never settled (only res.ok settles). Tell the agent so, and show a working example call.
+export async function withHint(res, url) {
+  try {
+    const b = await res.clone().json(); if (!b || typeof b !== "object" || Array.isArray(b) || b.example_call) return res;
+    const inp = bazaarV2(url.origin + url.pathname)?.bazaar?.info?.input;
+    let ex = null;
+    if (inp?.method === "GET") { const q = inp.queryParams && typeof inp.queryParams === "object" ? Object.entries(inp.queryParams).map(([k, v]) => [k, typeof v === "object" ? JSON.stringify(v) : String(v)]) : []; ex = { method: "GET", url: url.origin + url.pathname + (q.length ? "?" + new URLSearchParams(q) : "") }; }
+    else if (inp) ex = { method: inp.method, url: url.origin + url.pathname, json: inp.body ?? {} };
+    return J({ ...b, charged: false, ...(ex ? { example_call: ex } : {}), docs: url.origin + "/llms.txt" }, res.status);
+  } catch { return res; }
 }
 export default { fetch: handle, scheduled };

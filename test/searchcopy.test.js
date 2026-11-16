@@ -12,3 +12,12 @@ test("tokenprice unknown symbol -> 400 with hint (not charged)", async () => {
   const o = await tokenprice({ tokens: "NOTATOKEN" }); assert.equal(o.status, 400); assert.match(JSON.stringify(o.body), /ETH, BTC, USDC/);
   const e = await tokenprice({}); assert.equal(e.status, 400);
 });
+import { handle } from "../src/index.js";
+test("paid-route input errors carry charged:false + example_call", async () => {
+  const ENV = { BEGGAR_DEMAND_TESTS_ENABLED: "true", X402_MODE: "off", OPERATOR_NAME: "Beggar Bot" };
+  for (const p of ["/v1/tokenprice", "/v1/portfolio", "/v1/ens"]) {
+    const r = await handle(new Request("https://x.dev" + p), ENV); assert.equal(r.status, 400); const b = await r.json();
+    assert.equal(b.charged, false); assert.ok(b.error); assert.ok(b.example_call.url.startsWith("https://x.dev" + p + "?"), p);
+  }
+  const nf = await handle(new Request("https://x.dev/v1/nope"), ENV); assert.equal(nf.status, 404); assert.equal((await nf.json()).charged, undefined);
+});
