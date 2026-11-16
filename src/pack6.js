@@ -140,7 +140,7 @@ export async function txstatus(a) {
     const fin = { ethereum: 64, polygon: 128 }[ch] || 1; // L2: soft-final at inclusion by sequencer; L1 ~2 epochs
     Object.assign(out, { status: ok ? "success" : "reverted", block: bn, confirmations: conf, gas_used: Number(big(rc.gasUsed)), effective_gas_price_gwei: Number(big(rc.effectiveGasPrice)) / 1e9, fee_native: fmtUnits(big(rc.gasUsed) * big(rc.effectiveGasPrice) + big(rc.l1Fee), 18), logs: (rc.logs || []).length, contract_created: rc.contractAddress ? checksum(rc.contractAddress) : null, safe_to_ship: ok && conf >= fin, finality_note: ch === "ethereum" ? "≈64 blocks (2 epochs) for finality" : ch === "polygon" ? "≈128 blocks suggested" : "OP/Arbitrum L2: sequencer-confirmed at inclusion; L1-final after batch posting (~minutes) / 7-day challenge for withdrawals" });
     return { status: 200, body: out };
-  } catch (e) { return { status: 200, body: { chain: ch, live: false, error: String(e.message || e) } }; }
+  } catch (e) { return { status: 503, body: { retry: true, charged: false, chain: ch, live: false, error: String(e.message || e) } }; }
 }
 
 // ---- 5. /v1/paycheck ----

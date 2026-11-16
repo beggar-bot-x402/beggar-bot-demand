@@ -1,3 +1,4 @@
+import { searchDescription, ALIASES } from "./searchcopy.js";
 // Remote MCP (streamable HTTP, JSON responses, stateless) at /mcp. Tools proxy the paid HTTP routes,
 // so they share the exact x402 paywall (verify -> execute -> settle). Payment travels either as the
 // X-PAYMENT / PAYMENT-SIGNATURE HTTP header on the /mcp POST, or in params._meta["x402/payment"].
@@ -37,7 +38,7 @@ const TOOLS = [
   { name: "batch_decode", path: "/v1/batchdecode", method: "POST", description: "Recursively decode multicall / Multicall3 / Safe multiSend / 4337 executeBatch / Universal Router calldata into a call tree; flags hidden approvals and delegatecalls. Offline.",
     props: { data: "0x calldata", to: "target contract (optional)" }, required: ["data"] },
   { name: "token_price", path: "/v1/tokenprice", method: "GET", description: "On-chain USD price for up to 4 tokens from Uniswap v3 / Aerodrome pool state (no API key): deepest pool, liquidity, cross-pool spread, thin-liquidity flags.",
-    props: { tokens: "comma list of token addresses (≤4)", chain: "base (default) or ethereum" }, required: ["tokens"] },
+    props: { tokens: "≤4 comma-separated token symbols (ETH, BTC, USDC, AERO…) or contract addresses", chain: "base (default) or ethereum" }, required: ["tokens"] },
   { name: "wallet_portfolio", path: "/v1/portfolio", method: "GET", description: "Wallet holdings across 24 top Base tokens (+ your tokens) with on-chain USD prices, total value, native ETH, account type.",
     props: { address: "wallet address", tokens: "optional extra token addresses (comma, ≤20)", chain: "base (default) or ethereum (needs tokens)" }, required: ["address"] },
   { name: "gas_fee", path: "/v1/gasfee", method: "GET", description: "EIP-1559 fee suggestion (slow/standard/fast maxFeePerGas + priority), next base fee, congestion, OP-stack L1 fee and USD cost per tx type before sending.",
@@ -1211,6 +1212,8 @@ const TOOLS = [
   { name: "stable_growth", path: "/v1/stablegrowth", method: "GET", description: "Fastest-growing or shrinking stablecoins by circulating supply over 7d/30d",
     props: {"period": "7d|30d", "order": "growing|shrinking", "min_usd": "default 10000000", "limit": "1-200"}, required: [] },
 ];
+for (const t of TOOLS) { const d = searchDescription(t.path); if (d) t.description = d; }
+for (const [a, c] of Object.entries(ALIASES)) { const t = TOOLS.find((x) => x.path === c); if (t && !TOOLS.some((x) => x.path === a)) { let n = a.slice(4).replace(/\W+/g, "_"); if (TOOLS.some((x) => x.name === n)) n += "_api"; TOOLS.push({ ...t, name: n, path: a }); } }
 const schema = (t) => ({ type: "object", properties: Object.fromEntries(Object.entries(t.props).map(([k, d]) => [k, { ...((t.types || {})[k] === "any" ? {} : { type: (t.types || {})[k] || "string" }), ...((t.types || {})[k] === "array" ? { items: {} } : {}), description: d }])), required: t.required });
 export const mcpTools = (priceUsd) => TOOLS.map((t) => ({ name: t.name, description: t.description + (t.free || !priceUsd ? "" : ` Paid: $${priceUsd} USDC via x402.`), inputSchema: schema(t) }));
 const ok = (id, result) => ({ jsonrpc: "2.0", id, result });

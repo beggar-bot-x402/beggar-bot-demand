@@ -49,7 +49,7 @@ export async function erc20balances(a) {
   const base = calls.length; for (const ad of addrs) { for (const t of toks) calls.push(call(t, sel("balanceOf(address)") + aw(ad))); if (native) calls.push(["eth_getBalance", [ad, "latest"]]); }
   const res = new Array(calls.length).fill(null); let rpc;
   try { for (let i = 0; i < calls.length; i += 100) { const r = await rpcBatch(ch, calls.slice(i, i + 100)); rpc = r.rpc; r.results.forEach((x, k) => (res[i + k] = x)); } }
-  catch (e) { return { status: 200, body: { chain: ch, live: false, error: String(e.message || e) } }; }
+  catch (e) { return { status: 503, body: { retry: true, charged: false, chain: ch, live: false, error: String(e.message || e) } }; }
   const meta = toks.map((t, i) => { const d = res[2 * i]; return { token: checksum(t), symbol: decodeStr(res[2 * i + 1]) || null, decimals: d && d !== "0x" ? Number(big(d)) : null }; });
   let k = base; const totals = meta.map(() => 0n); let ntot = 0n;
   const rows = addrs.map((ad) => { const b = {}; meta.forEach((m, i) => { const v = big(res[k++]); totals[i] += v; b[m.symbol || m.token] = { raw: v.toString(), amount: m.decimals != null ? fmtUnits(v, m.decimals) : null }; }); const o = { address: checksum(ad), balances: b }; if (native) { const n = big(res[k++]); ntot += n; o.native = fmtUnits(n, 18); } return o; });

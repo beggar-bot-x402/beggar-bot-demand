@@ -159,7 +159,8 @@ import { feegrowth, revenuegrowth, dexgrowth, categoryfees } from "./pack48.js";
 import { poolhashrate, btcdiffadj, stabledominance, stablegrowth } from "./pack49.js";
 import { subtitle } from "./subtitle.js";
 import { imgmeta, avmeta, qr } from "./media.js";
-import { paidConfig, challenge, requirements, requirementsV2, v2Headers, decode, verifyPayment, settlePayment, PAID_PATHS, x402BodyPreference } from "./x402.js";
+import { canonical } from "./searchcopy.js";
+import { paidConfig, challenge, requirements, requirementsV2, v2Headers, decode, verifyPayment, settlePayment, PAID_PATHS, x402BodyPreference, bazaarV2 } from "./x402.js";
 
 const J = (obj, status = 200, extra = {}) => new Response(JSON.stringify(obj), { status, headers: { "content-type": "application/json", "access-control-allow-origin": "*", ...extra } });
 
@@ -278,7 +279,7 @@ async function logCall(env, req, url, status, started, ipHash) {
   const cls = req.__pay?.self ? "SELF_GENERATED" : classifyTraffic({ selftestOk, ua, path: url.pathname, ipHash, operatorHashes, status });
   const shape = [...url.searchParams.keys()].sort().join(",");
   await env.DB.prepare("INSERT INTO calls (ts,route,status,latency_ms,ip_hash,asn,ua,agent_hdr,referrer,query_shape,x_payment,traffic_class) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)")
-    .bind(new Date().toISOString(), url.pathname.slice(0, 128), status, Date.now() - started, ipHash, String(req.cf?.asn ?? ""), ua.slice(0, 200), (req.headers.get("x-agent") || req.headers.get("a2a-agent") || "").slice(0, 120), (req.headers.get("referer") || "").slice(0, 200), shape, req.headers.get("x-payment") ? 1 : 0, cls).run();
+    .bind(new Date().toISOString(), (req.__alias || url.pathname).slice(0, 128), status, Date.now() - started, ipHash, String(req.cf?.asn ?? ""), ua.slice(0, 200), (req.headers.get("x-agent") || req.headers.get("a2a-agent") || "").slice(0, 120), (req.headers.get("referer") || "").slice(0, 200), shape, req.headers.get("x-payment") ? 1 : 0, cls).run();
 }
 
 async function paywall(env, req, url) {
@@ -320,6 +321,7 @@ export async function handle(req, env) {
     else if (url.pathname === "/mcp" || url.pathname === "/mcp/") { const c = paidConfig(env); res = await mcp(req, env, handle, c.enabled ? String(Number(c.atomic) / 1e6) : null); }
     else if (url.pathname === "/.well-known/beggar-bot-keys.json") res = J({ keys: [await pubKey(env)] });
     else if (url.pathname.startsWith("/v1/") && (res = await paywall(env, req, url))) {}
+    else if (canonical(url.pathname) !== url.pathname && ((req.__alias = url.pathname), (url.pathname = canonical(url.pathname)), false)) {}
     else if (url.pathname === "/v1/verify" && req.method === "GET") res = await verify(env, url.searchParams);
     else if (url.pathname === "/v1/risk" && req.method === "GET") res = await risk(env, url.searchParams);
     else if (url.pathname === "/v1/receipt" && req.method === "POST") res = await receipt(env, req);
@@ -1039,10 +1041,11 @@ export async function handle(req, env) {
     else if (url.pathname === "/v1/batch" && req.method === "POST") { let b = null; try { b = await req.json(); } catch {} const o = await batch(b); res = J(o.body, o.status); }
     else res = J({ error: "not found" }, 404);
   } catch (e) { res = J({ error: "upstream_error", detail: String(e.message || e).slice(0, 160) }, 502); }
+  if (PAID_PATHS.has(url.pathname) && [400, 404, 422].includes(res.status)) res = await withHint(res, url);
   if (req.__pay) {
     if (res.ok) {
       const st = await settlePayment(req.__pay.cfg, req.__pay.payload, req.__pay.reqs, req.__pay.version);
-      if (env.DB) { try { await env.DB.prepare("INSERT INTO payments (ts,route,network,payer,amount_atomic,tx,ok,payment_class) VALUES (?,?,?,?,?,?,?,?)").bind(new Date().toISOString(), url.pathname, req.__pay.cfg.network, req.__pay.from, req.__pay.cfg.atomic, st.tx || "", st.ok ? 1 : 0, req.__pay.self ? "SELF_GENERATED" : "EXTERNAL").run(); } catch {} }
+      if (env.DB) { try { await env.DB.prepare("INSERT INTO payments (ts,route,network,payer,amount_atomic,tx,ok,payment_class) VALUES (?,?,?,?,?,?,?,?)").bind(new Date().toISOString(), (req.__alias || url.pathname), req.__pay.cfg.network, req.__pay.from, req.__pay.cfg.atomic, st.tx || "", st.ok ? 1 : 0, req.__pay.self ? "SELF_GENERATED" : "EXTERNAL").run(); } catch {} }
       const P = req.__pay;
       if (st.ok) { res = new Response(res.body, res); res.headers.set(P.version === 2 ? "payment-response" : "x-payment-response", st.header); res.headers.set("access-control-expose-headers", P.version === 2 ? "PAYMENT-RESPONSE" : "x-payment-response"); }
       else res = J({ x402Version: 1, error: "settlement_failed", reason: st.reason, accepts: [P.v1reqs] }, 402, v2Headers(P.cfg, P.resource, P.desc, "settlement_failed: " + st.reason));
@@ -1050,5 +1053,16 @@ export async function handle(req, env) {
   }
   try { await logCall(env, req, url, res.status, started, ipHash); } catch {}
   return res;
+}
+// Input errors on paid routes: never settled (only res.ok settles). Tell the agent so, and show a working example call.
+export async function withHint(res, url) {
+  try {
+    const b = await res.clone().json(); if (!b || typeof b !== "object" || Array.isArray(b) || b.example_call) return res;
+    const inp = bazaarV2(url.origin + url.pathname)?.bazaar?.info?.input;
+    let ex = null;
+    if (inp?.method === "GET") { const q = inp.queryParams && typeof inp.queryParams === "object" ? Object.entries(inp.queryParams).map(([k, v]) => [k, typeof v === "object" ? JSON.stringify(v) : String(v)]) : []; ex = { method: "GET", url: url.origin + url.pathname + (q.length ? "?" + new URLSearchParams(q) : "") }; }
+    else if (inp) ex = { method: inp.method, url: url.origin + url.pathname, json: inp.body ?? {} };
+    return J({ ...b, charged: false, ...(ex ? { example_call: ex } : {}), docs: url.origin + "/llms.txt" }, res.status);
+  } catch { return res; }
 }
 export default { fetch: handle, scheduled };

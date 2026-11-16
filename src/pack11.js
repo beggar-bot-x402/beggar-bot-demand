@@ -26,6 +26,7 @@ export async function stablepeg(a) {
     let rows = d.peggedAssets.filter((p) => p.pegType === "peggedUSD" && typeof p.price === "number").map((p) => { const c = p.circulating?.peggedUSD || 0, pd = p.circulatingPrevDay?.peggedUSD || 0, pw = p.circulatingPrevWeek?.peggedUSD || 0;
       return { symbol: p.symbol, name: p.name, mechanism: p.pegMechanism, price: p.price, deviation_pct: +((p.price - 1) * 100).toFixed(3), depegged: Math.abs(p.price - 1) > th, circulating_usd: Math.round(c), supply_change_1d_pct: pd ? +((c / pd - 1) * 100).toFixed(2) : null, supply_change_7d_pct: pw ? +((c / pw - 1) * 100).toFixed(2) : null }; });
     if (want.length) rows = rows.filter((r) => want.includes(r.symbol.toUpperCase())); else rows = rows.filter((r) => r.circulating_usd > 1e7);
+    if (want.length && !rows.length) return R(404, { error: "no matching USD stablecoins", symbols: want, hint: "use tickers such as USDT,USDC,DAI,USDe,USDS,PYUSD or omit symbols for all > $10M" });
     rows.sort((x, y) => y.circulating_usd - x.circulating_usd);
     return R(200, { threshold: th, count: rows.length, depegged: rows.filter((r) => r.depegged).map((r) => r.symbol), stablecoins: rows.slice(0, Math.min(100, parseInt(a.limit || "40", 10) || 40)) });
   } catch (e) { return R(502, { error: String(e.message || e) }); }
