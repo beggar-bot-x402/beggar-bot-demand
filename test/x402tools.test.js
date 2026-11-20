@@ -59,9 +59,9 @@ test("routes: 34 paid, new routes 402 at 20000, free mode serves, discovery orde
   const free = { BEGGAR_DEMAND_TESTS_ENABLED: "true" };
   const r = await handle(new Request("https://w.test/v1/usdcamount?amount=0.02"), free); assert.equal(r.status, 200); assert.equal((await r.json()).atomic, "20000");
   const w = await (await handle(new Request("https://w.test/.well-known/x402"), PAID)).json();
-  const paidOrder = w.endpoints.map((e) => new URL(e.resource).pathname); assert.deepEqual(paidOrder.slice(0, 6), ["/v1/tokenprice", "/v1/portfolio", "/v1/erc20balances", "/v1/nativebalances", "/v1/fetch", "/v1/gasfee"]);
+  const paidOrder = w.endpoints.map((e) => new URL(e.resource).pathname); assert.deepEqual(paidOrder.slice(0, 6), ["/v1/token-price", "/v1/gas-price", "/v1/wallet/token-balances", "/v1/web/fetch", "/v1/wallet/portfolio", "/v1/wallet/balance"]);
   assert.ok(w.endpoints.length >= 55); assert.equal(w.resources.find((x) => x.resource.endsWith("/v1/receipt/verify")).accepts.length, 0);
-  const o = await (await handle(new Request("https://w.test/openapi.json"), PAID)).json(); assert.deepEqual(Object.keys(o.paths).slice(0, 2), ["/v1/tokenprice", "/v1/portfolio"]);
+  const o = await (await handle(new Request("https://w.test/openapi.json"), PAID)).json(); assert.deepEqual(Object.keys(o.paths).slice(0, 2), ["/v1/token-price", "/v1/gas-price"]);
 });
 test("receipt/verify: GET + aliases return 200 usage with a verifiable live sample (validator-friendly), stays free", async () => {
   const kp = await crypto.subtle.generateKey("Ed25519", true, ["sign", "verify"]); const jwk = await crypto.subtle.exportKey("jwk", kp.privateKey);

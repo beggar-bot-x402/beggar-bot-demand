@@ -1213,7 +1213,7 @@ const TOOLS = [
     props: {"period": "7d|30d", "order": "growing|shrinking", "min_usd": "default 10000000", "limit": "1-200"}, required: [] },
 ];
 for (const t of TOOLS) { const d = searchDescription(t.path); if (d) t.description = d; }
-for (const [a, c] of Object.entries(ALIASES)) { const t = TOOLS.find((x) => x.path === c); if (t && !TOOLS.some((x) => x.path === a)) { let n = a.slice(4).replace(/\W+/g, "_"); if (TOOLS.some((x) => x.name === n)) n += "_api"; TOOLS.push({ ...t, name: n, path: a }); } }
+for (const [a, c] of Object.entries(ALIASES)) { const t = TOOLS.find((x) => x.path === c); if (t && !TOOLS.some((x) => x.path === a)) { let n = a.slice(4).replace(/\W+/g, "_"), i = 2; if (TOOLS.some((x) => x.name === n)) { const base = n; n = base + "_api"; while (TOOLS.some((x) => x.name === n)) n = base + "_api" + i++; } TOOLS.push({ ...t, name: n, path: a }); } }
 const schema = (t) => ({ type: "object", properties: Object.fromEntries(Object.entries(t.props).map(([k, d]) => [k, { ...((t.types || {})[k] === "any" ? {} : { type: (t.types || {})[k] || "string" }), ...((t.types || {})[k] === "array" ? { items: {} } : {}), description: d }])), required: t.required });
 export const mcpTools = (priceUsd) => TOOLS.map((t) => ({ name: t.name, description: t.description + (t.free || !priceUsd ? "" : ` Paid: $${priceUsd} USDC via x402.`), inputSchema: schema(t) }));
 const ok = (id, result) => ({ jsonrpc: "2.0", id, result });

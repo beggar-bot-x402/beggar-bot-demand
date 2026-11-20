@@ -45,6 +45,9 @@ export const ALIASES = {
   "/v1/wallet/portfolio": "/v1/portfolio", "/v1/wallet/balance": "/v1/nativebalances", "/v1/tx/decode": "/v1/txsummary", "/v1/tx/status": "/v1/txstatus",
   "/v1/token/info": "/v1/tokeninfo", "/v1/ens/resolve": "/v1/ens", "/v1/basename/resolve": "/v1/basename", "/v1/perp/funding-rate": "/v1/perpfunding",
   "/v1/stablecoin/peg": "/v1/stablepeg", "/v1/crypto/news": "/v1/cryptonews", "/v1/weather/forecast": "/v1/weather", "/v1/address/check": "/v1/addrprofile",
+  // Extra path aliases matching how high-demand Bazaar routes are written (Greg t221u). Same handler/price/metadata; CDP-settled when the canonical route is.
+  "/v1/crypto/price": "/v1/tokenprice", "/v1/price/token": "/v1/tokenprice", "/v1/weather/current": "/v1/weather", "/v1/tx-status": "/v1/txstatus",
+  "/v1/decode/tx": "/v1/txsummary", "/v1/erc20-balance": "/v1/erc20balances", "/v1/current-balance": "/v1/portfolio", "/v1/nft-metadata": "/v1/nftmeta",
 };
 export const canonical = (p) => ALIASES[p] || p;
 export function addAliases(table, clone = (v) => ({ ...v })) { for (const [a, c] of Object.entries(ALIASES)) if (table[c] && !table[a]) table[a] = clone(table[c]); return table; }

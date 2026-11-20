@@ -1,5 +1,5 @@
 import test from "node:test"; import assert from "node:assert/strict";
-import { DISCOVERY } from "../src/x402.js"; import { SEARCH_COPY } from "../src/searchcopy.js"; import { symbolMap, tokenprice } from "../src/chaindata.js";
+import { DISCOVERY } from "../src/x402.js"; import { SEARCH_COPY, ALIASES } from "../src/searchcopy.js"; import { symbolMap, tokenprice } from "../src/chaindata.js";
 test("search copy applied to DISCOVERY with ≤5 tags", () => {
   for (const p of Object.keys(SEARCH_COPY)) { const d = DISCOVERY[p]; assert.ok(d, p); assert.ok(d.description.startsWith(SEARCH_COPY[p].d), p); assert.ok(d.tags.length <= 5 && d.tags.length >= 3, p); assert.ok(d.description.length < 600, p); }
 });
@@ -24,10 +24,14 @@ test("paid-route input errors carry charged:false + example_call", async () => {
 test("slim x402-top manifest lists only demand-matched routes at 20000", async () => {
   const ENV = { BEGGAR_DEMAND_TESTS_ENABLED: "true", X402_MODE: "mainnet", X402_MAINNET_ALLOWED: "true", X402_PAY_TO: "0x719227f384b66BFEF00093D6d8d32fA9dC2B40e7", X402_PRICE_USD: "0.02", X402_FACILITATOR_URL: "https://fac.test", OPERATOR_NAME: "Beggar Bot" };
   const r = await handle(new Request("https://x.dev/.well-known/x402-top.json"), ENV); assert.equal(r.status, 200); const t = await r.text(); const b = JSON.parse(t);
-  assert.equal(b.resources.length, Object.keys(SEARCH_COPY).length + 16); assert.ok(t.length < 100000, String(t.length));
+  assert.equal(b.resources.length, Object.keys(SEARCH_COPY).length + Object.keys(ALIASES).length); assert.ok(t.length < 100000, String(t.length));
   for (const x of b.resources) assert.equal(x.accepts[0].maxAmountRequired, "20000");
+  const paths = b.resources.map((x) => new URL(x.resource).pathname);
+  const aliases = Object.keys(ALIASES);
+  assert.deepEqual(paths.slice(0, aliases.length), aliases);
+  assert.equal(paths[aliases.length], Object.keys(SEARCH_COPY)[0]);
 });
-import { ALIASES } from "../src/searchcopy.js"; import { PAID_PATHS, paidConfig } from "../src/x402.js";
+import { PAID_PATHS, paidConfig } from "../src/x402.js";
 test("aliases: even count, paid 402 at 20000 with alias resource, serve canonical handler, CDP mapping", async () => {
   const ENV = { BEGGAR_DEMAND_TESTS_ENABLED: "true", X402_MODE: "mainnet", X402_MAINNET_ALLOWED: "true", X402_PAY_TO: "0x719227f384b66BFEF00093D6d8d32fA9dC2B40e7", X402_PRICE_USD: "0.02", X402_FACILITATOR_URL: "https://fac.test", OPERATOR_NAME: "Beggar Bot", X402_CDP_ROUTES: "/v1/tokenprice,/v1/basename", CDP_API_KEY_ID: "k", CDP_API_KEY_SECRET: "s" };
   const A = Object.keys(ALIASES); assert.equal(A.length % 2, 0);
