@@ -132,7 +132,7 @@ export async function solbalance(a) {
 // ---- /v1/whois (RDAP) ----
 export async function whois(a) {
   const d = String(a.domain || a.q || "").trim().toLowerCase().replace(/^https?:\/\//, "").replace(/\/.*$/, "").replace(/\.$/, "");
-  if (!/^(?=.{3,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9-]{2,63}$/.test(d)) return bad("domain required (e.g. example.com)");
+  if (!/^(?=.{3,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9-]{2,63}$/.test(d)) return bad("domain required (e.g. base.org)");
   try {
     const r = await fetch(`https://rdap.org/domain/${d}`, { headers: { ...UA, accept: "application/rdap+json,application/json" }, signal: AbortSignal.timeout(9000) });
     if (r.status === 404) return ok({ domain: d, registered: false, note: "RDAP 404: likely unregistered (or TLD without RDAP)" });

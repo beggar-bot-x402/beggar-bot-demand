@@ -83,7 +83,7 @@ export async function x402req(q) {
   if (!isA(q.pay_to || q.payTo)) return bad("pay_to address required"); const payTo = checksum(q.pay_to || q.payTo);
   const p = String(q.price_usd ?? q.price ?? "0.01").replace(/^\$/, ""); if (!/^\d+(\.\d{1,6})?$/.test(p) || Number(p) <= 0) return bad("price_usd: positive number, max 6 decimals");
   const [i, f = ""] = p.split("."); const atomic = (BigInt(i) * 1000000n + BigInt((f + "000000").slice(0, 6))).toString();
-  let resource = String(q.resource || "https://example.com/api"); try { new URL(resource); } catch { return bad("resource must be an absolute URL"); }
+  let resource = String(q.resource || "https://docs.base.org/"); try { new URL(resource); } catch { return bad("resource must be an absolute URL"); }
   const req = { scheme: "exact", network: net, maxAmountRequired: atomic, resource, description: String(q.description || "").slice(0, 300), mimeType: String(q.mime_type || "application/json"), payTo, maxTimeoutSeconds: Number(q.max_timeout || 60), asset: USDC[net], extra: { name: net === "base" ? "USD Coin" : "USDC", version: "2" } };
   const body = { x402Version: 1, error: "X-PAYMENT header is required", accepts: [req] };
   const checks = {};
