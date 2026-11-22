@@ -1,7 +1,18 @@
 import test from "node:test"; import assert from "node:assert/strict";
 import { DISCOVERY } from "../src/x402.js"; import { SEARCH_COPY, ALIASES } from "../src/searchcopy.js"; import { symbolMap, tokenprice } from "../src/chaindata.js";
+import { handle } from "../src/index.js";
 test("search copy applied to DISCOVERY with ≤5 tags", () => {
-  for (const p of Object.keys(SEARCH_COPY)) { const d = DISCOVERY[p]; assert.ok(d, p); assert.ok(d.description.startsWith(SEARCH_COPY[p].d), p); assert.ok(d.tags.length <= 5 && d.tags.length >= 3, p); assert.ok(d.description.length < 600, p); }
+  for (const p of Object.keys(SEARCH_COPY)) { const d = DISCOVERY[p]; assert.ok(d, p); assert.ok(d.description.startsWith(SEARCH_COPY[p].d), p); assert.ok(d.tags.length <= 5 && d.tags.length >= 3, p); assert.ok(d.description.length < 600, p); assert.deepEqual(d.tags, SEARCH_COPY[p].t.slice(0, 5), p); for (const tag of d.tags) { assert.ok(tag.length <= 32 && /^[\x20-\x7E]+$/.test(tag), p + " " + tag); } }
+});
+test("v2 402 resource includes iconUrl and buyer-query tags", async () => {
+  const ENV = { BEGGAR_DEMAND_TESTS_ENABLED: "true", X402_MODE: "mainnet", X402_MAINNET_ALLOWED: "true", X402_PAY_TO: "0x719227f384b66BFEF00093D6d8d32fA9dC2B40e7", X402_PRICE_USD: "0.02", X402_FACILITATOR_URL: "https://fac.test", OPERATOR_NAME: "Beggar Bot" };
+  const r = await handle(new Request("https://x.dev/v1/token-price"), ENV); assert.equal(r.status, 402);
+  const v2 = JSON.parse(Buffer.from(r.headers.get("PAYMENT-REQUIRED"), "base64").toString());
+  assert.equal(v2.resource.iconUrl, "https://x.dev/favicon.png");
+  assert.deepEqual(v2.resource.tags, SEARCH_COPY["/v1/tokenprice"].t.slice(0, 5));
+  assert.match(v2.resource.description, /Token price and crypto price/);
+  assert.ok(v2.extensions.bazaar.info.output.example);
+  assert.ok(v2.extensions.bazaar.schema.properties.output.properties);
 });
 test("tokenprice symbol map", () => {
   assert.equal(symbolMap("base").ETH, "0x4200000000000000000000000000000000000006");
@@ -12,7 +23,6 @@ test("tokenprice unknown symbol -> 400 with hint (not charged)", async () => {
   const o = await tokenprice({ tokens: "NOTATOKEN" }); assert.equal(o.status, 400); assert.match(JSON.stringify(o.body), /ETH, BTC, USDC/);
   const e = await tokenprice({}); assert.equal(e.status, 400);
 });
-import { handle } from "../src/index.js";
 test("paid-route input errors carry charged:false + example_call", async () => {
   const ENV = { BEGGAR_DEMAND_TESTS_ENABLED: "true", X402_MODE: "off", OPERATOR_NAME: "Beggar Bot" };
   for (const p of ["/v1/tokenprice", "/v1/portfolio", "/v1/ens"]) {
